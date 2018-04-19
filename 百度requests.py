@@ -1,10 +1,34 @@
 import time
+import pymysql
 import requests
 from lxml import etree
 
 class BaiDu:
     def __init__(self,keyword):
-        self.url = 'http://www.baidu.com/s?wd=' + keyword + '&ie=UTF-8'
+        # Mysql配置
+        self.host = 'localhost'
+        self.user = 'root'
+        self.password = 'root'
+        self.port = 3306
+        self.db = 'spider'
+        self.keyword = keyword
+
+        self.url = 'http://www.baidu.com/s?wd=' + self.keyword + '&ie=UTF-8'
+
+    def save(self,table,data):
+        db = pymysql.connect(host=self.host,user=self.user,password=self.password,port=self.port,db=self.db,charset='utf8')
+        cursor = db.cursor()
+        keys = ', '.join(data.keys())
+        values = ', '.join(['%s'] * len(data))
+        sql = 'INSERT INTO {table}({keys}) VALUES ({values})'.format(table=table, keys=keys, values=values)
+        try:
+            if cursor.execute(sql, tuple(data.values())):
+                print('Successful')
+                db.commit()
+        except:
+            print('Failed')
+            db.rollback()
+        db.close()
 
     def get_html(self):
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:55.0) Gecko/20100101 Firefox/55.0'}
@@ -22,9 +46,17 @@ class BaiDu:
         for i in a :
             title = i.xpath('string(.)')
             titles.append(title)
+        ids = range(len(titles))
 
-        for title,url,land_url,display_url in zip(titles,urls,land_urls,display_urls):
-            print('标题：%s\n链接：%s\n落地页：%s\n显示URL：%s\n'%(title,url,land_url,display_url))
+        for id,title,url,land_url in zip(ids,titles,urls,land_urls):
+            data = {
+                'id':id,
+                'keyword':self.keyword,
+                'title':title,
+                'url':url,
+                'land_url':land_url
+            }
+            self.save('baidu',data)
 
 
     def main(self):
@@ -33,5 +65,5 @@ class BaiDu:
         print('OK')
 
 if __name__=="__main__":
-    app = BaiDu("广州律师事务所")
+    app = BaiDu("法律咨询")
     app.main()
