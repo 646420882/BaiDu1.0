@@ -1,20 +1,28 @@
 import time
 import pymysql
 import requests
+import re
+import random
 from lxml import etree
 
 class BaiDu:
-    def __init__(self,keyword):
+    def __init__(self):
         # Mysql配置
         self.host = 'localhost'
         self.user = 'root'
         self.password = 'root'
         self.port = 3306
         self.db = 'spider'
-        self.keyword = keyword
         self.table = 'baidu'
 
-        self.url = 'http://www.baidu.com/s?wd=' + self.keyword + '&ie=UTF-8'
+        self.filename = '关键词.txt'
+        self.sleep = 10
+        self.keywords = []
+        self.keyword = ''
+
+    def get_keywords(self):
+        with open(self.filename, 'r') as f:
+            self.keywords = f.read().splitlines()
 
     def save(self,table,data):
         db = pymysql.connect(host=self.host,user=self.user,password=self.password,port=self.port,db=self.db,charset='utf8')
@@ -32,12 +40,43 @@ class BaiDu:
         db.close()
 
     def get_html(self):
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:55.0) Gecko/20100101 Firefox/55.0'}
+        UA_list = [
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/22.0.1207.1 Safari/537.1",
+            "Mozilla/5.0 (X11; CrOS i686 2268.111.0) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/536.11",
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1092.0 Safari/536.6",
+            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1090.0 Safari/536.6",
+            "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/19.77.34.5 Safari/537.1",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.9 Safari/536.5",
+            "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
+            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_0) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
+            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1062.0 Safari/536.3",
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1062.0 Safari/536.3",
+            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
+            "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
+            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.0 Safari/536.3",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24",
+            "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24"
+        ]
+        UA = random.choice(UA_list)
+        headers = {'User-Agent': UA}
         r = requests.get(self.url, headers=headers)
         return r.text
 
     def parse(self,html):
         sel = etree.HTML(html)
+
+        pattern = re.compile('.ec-showurl-lh20 .(.*?){line-height:20px}.icon{display:inline-block',
+                             re.S)
+        try:
+            class_name = re.findall(pattern, html)[0]  # 显示URL的classname
+            pattern = '//div[@id>3000]//span[@class="%s"]/text()' % class_name
+        except:
+            a = 1
+            print('class_name：出错')
+
         urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@href')  # 广告链接
         land_urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@data-landurl')  # 落地页链接
         times = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
@@ -47,13 +86,8 @@ class BaiDu:
             title = i.xpath('string(.)')
             titles.append(title)
         rankings = range(1,len(titles)+1)
-        display_urls = []
-        for land_url in land_urls:
-            if 'https' in land_url:
-                display_url = land_url.split('https://')[1].split('/')[0]
-            else:
-                display_url = land_url.split('http://')[1].split('/')[0]
-            display_urls.append(display_url)
+
+        display_urls = sel.xpath(pattern)
         if len(urls)==len(display_urls):
             for ranking, title, url, land_url, display_url in zip(rankings, titles, urls, land_urls, display_urls):
                 data = {
@@ -67,17 +101,20 @@ class BaiDu:
                 }
                 self.save(self.table, data)
         else:
-            print('titles:',titles)
-            print('urls:', urls)
-            print('land_urls:', land_urls)
-            print('display_urls:', display_urls)
-            print('rankings:', rankings)
             print('数据未对齐')
 
     def main(self):
-        html = self.get_html()
-        self.parse(html)
+        self.get_keywords()
+        for keyword in self.keywords:
+            print('当前关键词：%s'%keyword)
+            self.keyword = keyword
+            self.url = 'http://www.baidu.com/s?wd=' + self.keyword + '&ie=UTF-8'
+
+            self.parse(self.get_html())
+            time.sleep(self.sleep)
+
+
 
 if __name__=="__main__":
-    app = BaiDu("律师事务所")
+    app = BaiDu()
     app.main()
