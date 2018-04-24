@@ -60,8 +60,9 @@ class BaiDu:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24",
             "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24"
         ]
-        UA = random.choice(UA_list)
-        headers = {'User-Agent': UA}
+        #UA = random.choice(UA_list)
+        #headers = {'User-Agent': UA}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:55.0) Gecko/20100101 Firefox/55.0'}
         r = requests.get(self.url, headers=headers)
         return r.text
 
