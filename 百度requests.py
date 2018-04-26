@@ -21,7 +21,7 @@ class BaiDu:
         self.keyword = ''
 
     def get_keywords(self):
-        with open(self.filename, 'r') as f:
+        with open(self.filename, 'r',encoding="utf-8") as f:
             self.keywords = f.read().splitlines()
 
     def save(self,table,data):
@@ -63,46 +63,54 @@ class BaiDu:
         #UA = random.choice(UA_list)
         #headers = {'User-Agent': UA}
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:55.0) Gecko/20100101 Firefox/55.0'}
+        print(headers)
         r = requests.get(self.url, headers=headers)
         return r.text
 
     def parse(self,html):
+        a = 1
         sel = etree.HTML(html)
 
-        pattern = re.compile('.ec-showurl-lh20 .(.*?){line-height:20px}.icon{display:inline-block',
+        pattern = re.compile('.ec-showurl-lh20 .(.*?){line-height:20px}',
                              re.S)
         try:
             class_name = re.findall(pattern, html)[0]  # 显示URL的classname
             pattern = '//div[@id>3000]//span[@class="%s"]/text()' % class_name
         except:
-            a = 1
+            a = 0
             print('class_name：出错')
+        if a :
+            urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@href')  # 广告链接
+            land_urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@data-landurl')  # 落地页链接
+            times = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            titles = []
+            a = sel.xpath('//div[@id>3000]/div[1]/h3/a')
+            for i in a:
+                title = i.xpath('string(.)')
+                titles.append(title)
+            rankings = range(1, len(titles) + 1)
 
-        urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@href')  # 广告链接
-        land_urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@data-landurl')  # 落地页链接
-        times = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        titles = []
-        a = sel.xpath('//div[@id>3000]/div[1]/h3/a')
-        for i in a :
-            title = i.xpath('string(.)')
-            titles.append(title)
-        rankings = range(1,len(titles)+1)
-
-        display_urls = sel.xpath(pattern)
-        if len(urls)==len(display_urls):
-            for ranking, title, url, land_url, display_url in zip(rankings, titles, urls, land_urls, display_urls):
-                data = {
-                    'time': times,
-                    'ranking': ranking,
-                    'keyword': self.keyword,
-                    'title': title,
-                    'url': url,
-                    'land_url': land_url,
-                    'display_url': display_url
-                }
-                self.save(self.table, data)
+            display_urls = sel.xpath(pattern)
+            if len(urls) == len(display_urls):
+                for ranking, title, url, land_url, display_url in zip(rankings, titles, urls, land_urls, display_urls):
+                    data = {
+                        'engine': 'baidu',
+                        'type': 'PC',
+                        'time': times,
+                        'ranking': ranking,
+                        'keyword': self.keyword,
+                        'title': title,
+                        'url': url,
+                        'land_url': land_url,
+                        'display_url': display_url
+                    }
+                    self.save(self.table, data)
+            else:
+                print('数据未对齐')
         else:
-            print('数据未对齐')
+            print('无结果：%s'%self.keyword)
+
+
 
     def main(self):
         self.get_keywords()
