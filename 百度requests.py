@@ -78,7 +78,8 @@ class BaiDu:
             pattern = '//div[@id>3000]//span[@class="%s"]/text()' % class_name
         except:
             a = 0
-            print('class_name：出错')
+            print(html)
+            print('当前显示无广告？')
         if a :
             urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@href')  # 广告链接
             land_urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@data-landurl')  # 落地页链接
@@ -104,7 +105,8 @@ class BaiDu:
                         'land_url': land_url,
                         'display_url': display_url
                     }
-                    self.save(self.table, data)
+                    print(data)
+                    #self.save(self.table, data)
             else:
                 print('数据未对齐')
         else:
