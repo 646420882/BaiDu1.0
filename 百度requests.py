@@ -3,6 +3,12 @@ import pymysql
 import requests
 import re
 import random
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from apscheduler.schedulers.blocking import BlockingScheduler
+import time
 from lxml import etree
 
 class BaiDu:
@@ -13,10 +19,10 @@ class BaiDu:
         self.password = 'root'
         self.port = 3306
         self.db = 'spider'
-        self.table = 'baidu'
+        self.table = 'result'
 
         self.filename = '关键词.txt'
-        self.sleep = 10
+        self.sleep = 5
         self.keywords = []
         self.keyword = ''
 
@@ -24,12 +30,58 @@ class BaiDu:
         with open(self.filename, 'r',encoding="utf-8") as f:
             self.keywords = f.read().splitlines()
 
-    def save(self,table,data):
-        db = pymysql.connect(host=self.host,user=self.user,password=self.password,port=self.port,db=self.db,charset='utf8')
+    def get_html(self):
+        # UA = random.choice(UA_list)
+        # headers = {'User-Agent': UA}
+        #移动
+        #headers = {'User-Agent':'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Mobile Safari/537.36'}
+        #PC
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36'}
+        r = requests.get(self.url, headers=headers)
+        return r.text
+
+    def parse(self,html):
+        sel = etree.HTML(html)
+        search_day = time.strftime("%Y-%m-%d", time.localtime())  # 日期
+        search_time = time.strftime("%H:%M:%S", time.localtime())  # 时间
+        ids = ['3001', '3002', '3003', '3004', '3005','4001','4002','4003','4004','4005','5001','5002','5003','5004','5005']
+        rank = 1
+        for id in ids:
+            try:
+                sel1 = sel.xpath('//div[@id=%s]' % id)[0]
+                title = sel1.xpath('./div[1]/h3/a')[0].xpath('string(.)')  # 标题
+                url = sel1.xpath('./div[1]/h3/a/@href')[0]  # 广告链接
+                land_url = sel1.xpath('./div[1]/h3/a/@data-landurl')[0]  # 落地页链接
+                display_url = re.search('://(.*?)/', land_url, re.S).group(1)  # 显示连接
+                data = {
+                    'search_engine': '百度',
+                    'search_type': 'PC',
+                    'search_date': search_day,
+                    'search_time': search_time,
+                    'search_ranking': rank,
+                    'keyword': self.keyword,
+                    'title': title,
+                    #'url': url,
+                    'disp_id': id,
+                    'land_url': land_url,
+                    'display_url': display_url
+                }
+                rank +=1
+                print(data)
+                self.save(data)
+            except:
+                # print('%s not found' % id)
+                pass
+        #driver.close()
+        print('加载完成')
+
+    def save(self,data):
+        db = pymysql.connect(host=self.host, user=self.user, password=self.password, port=self.port, db=self.db,
+                             charset='utf8')
         cursor = db.cursor()
         keys = ', '.join(data.keys())
         values = ', '.join(['%s'] * len(data))
-        sql = 'INSERT INTO {table}({keys}) VALUES ({values})'.format(table=table, keys=keys, values=values)
+        sql = 'INSERT INTO {table}({keys}) VALUES ({values})'.format(table=self.table, keys=keys, values=values)
         try:
             if cursor.execute(sql, tuple(data.values())):
                 print('Successful')
@@ -37,91 +89,16 @@ class BaiDu:
         except:
             print('Failed')
             db.rollback()
-        db.close()
-
-    def get_html(self):
-        UA_list = [
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/22.0.1207.1 Safari/537.1",
-            "Mozilla/5.0 (X11; CrOS i686 2268.111.0) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/536.11",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1092.0 Safari/536.6",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1090.0 Safari/536.6",
-            "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/19.77.34.5 Safari/537.1",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.9 Safari/536.5",
-            "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_0) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1062.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1062.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.0 Safari/536.3",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24",
-            "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24"
-        ]
-        #UA = random.choice(UA_list)
-        #headers = {'User-Agent': UA}
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:55.0) Gecko/20100101 Firefox/55.0'}
-        print(headers)
-        r = requests.get(self.url, headers=headers)
-        return r.text
-
-    def parse(self,html):
-        a = 1
-        sel = etree.HTML(html)
-
-        pattern = re.compile('.ec-showurl-lh20 .(.*?){line-height:20px}',
-                             re.S)
-        try:
-            class_name = re.findall(pattern, html)[0]  # 显示URL的classname
-            pattern = '//div[@id>3000]//span[@class="%s"]/text()' % class_name
-        except:
-            a = 0
-            print(html)
-            print('当前显示无广告？')
-        if a :
-            urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@href')  # 广告链接
-            land_urls = sel.xpath('//div[@id>3000]/div[1]/h3/a/@data-landurl')  # 落地页链接
-            times = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            titles = []
-            a = sel.xpath('//div[@id>3000]/div[1]/h3/a')
-            for i in a:
-                title = i.xpath('string(.)')
-                titles.append(title)
-            rankings = range(1, len(titles) + 1)
-
-            display_urls = sel.xpath(pattern)
-            if len(urls) == len(display_urls):
-                for ranking, title, url, land_url, display_url in zip(rankings, titles, urls, land_urls, display_urls):
-                    data = {
-                        'engine': 'baidu',
-                        'type': 'PC',
-                        'time': times,
-                        'ranking': ranking,
-                        'keyword': self.keyword,
-                        'title': title,
-                        'url': url,
-                        'land_url': land_url,
-                        'display_url': display_url
-                    }
-                    print(data)
-                    #self.save(self.table, data)
-            else:
-                print('数据未对齐')
-        else:
-            print('无结果：%s'%self.keyword)
-
-
+        finally:
+            db.close()
 
     def main(self):
         self.get_keywords()
         for keyword in self.keywords:
-            print('当前关键词：%s'%keyword)
             self.keyword = keyword
-            self.url = 'http://www.baidu.com/s?wd=' + self.keyword + '&ie=UTF-8'
-
-            self.parse(self.get_html())
+            self.url = 'https://www.baidu.com/s?wd=' + self.keyword + '&ie=UTF-8'
+            html = self.get_html()
+            self.parse(html)
             time.sleep(self.sleep)
 
 
